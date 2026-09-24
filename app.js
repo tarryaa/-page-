@@ -411,9 +411,12 @@
   function cardHtml(item) {
     var e = item.e, h = '';
     h += '<article class="card">';
-    h += '<div class="term">' + esc(e.term) + '</div>';
-    if (e.kanaList.length) h += '<div class="yomi">' + esc(e.kanaList.join('／')) + '</div>';
-    if (e.pages.length) h += '<div class="pages">p.' + e.pages.join(', ') + '</div>';
+    // 用語・読み・ページを1行にまとめて、1件あたりの高さを抑える
+    h += '<div class="head"><div class="names"><span class="term">' + esc(e.term) + '</span>';
+    if (e.kanaList.length) h += '<span class="yomi">' + esc(e.kanaList.join('／')) + '</span>';
+    h += '</div>';
+    if (e.pages.length) h += '<span class="pages">p.' + e.pages.join(', ') + '</span>';
+    h += '</div>';
 
     var tags = [];
     if (e.kind) tags.push('<span class="tag kind">' + esc(e.kind) + '</span>');

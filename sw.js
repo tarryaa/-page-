@@ -8,7 +8,7 @@
    これだけで、古いキャッシュは自動で消えて新しい内容に入れ替わります。
    ============================================================ */
 
-var CACHE_VERSION = 'v1';
+var CACHE_VERSION = 'v2';
 var CACHE_NAME = 'nihonshi-index-' + CACHE_VERSION;
 
 var ASSETS = [
