@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>日本史索引</title>
+<meta name="description" content="日本史教科書の索引を検索するアプリ">
+<meta name="theme-color" content="#8c2f39" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16171c" media="(prefers-color-scheme: dark)">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="日本史索引">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header id="topbar">
+  <div class="bar-row">
+    <h1 class="app-title">日本史索引</h1>
+    <button id="btn-settings" class="icon-btn" type="button" aria-label="設定">設定</button>
+  </div>
+
+  <div class="search-row">
+    <input id="q" type="search" inputmode="search" enterkeyhint="search"
+           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+           placeholder="用語・読み（例：日中へいわ）" aria-label="検索">
+    <button id="btn-clear" class="clear-btn" type="button" aria-label="検索欄を消す" hidden>×</button>
+  </div>
+
+  <div class="bar-row tools">
+    <span id="count" class="count">0件</span>
+    <select id="sort" aria-label="並び替え">
+      <option value="year_asc">時代の古い順</option>
+      <option value="year_desc">時代の新しい順</option>
+      <option value="kana_asc">名前順（五十音）</option>
+      <option value="kana_desc">名前の逆順</option>
+    </select>
+    <button id="btn-filter" class="filter-btn" type="button">絞り込み<span id="filter-badge" class="badge" hidden>0</span></button>
+  </div>
+
+  <div id="chips" class="chips" hidden></div>
+</header>
+
+<main id="results" aria-live="polite"></main>
+<div id="sentinel"></div>
+<p id="empty-msg" class="empty-msg" hidden>条件に合う項目がありません。</p>
+
+<!-- 起動時の案内（データが無いとき） -->
+<div id="onboarding" class="overlay" hidden>
+  <div class="onboard-box">
+    <h2>データがまだありません</h2>
+    <p>このアプリを使うには、索引データ（CSVファイル）が必要です。</p>
+    <p class="hint">パソコンで確認するときは、この画面から4つのCSVを選んでください。<br>
+      （iPhoneでは「ファイル」アプリから選べます）</p>
+    <ol class="steps">
+      <li>下の「データを取り込む」を押します。</li>
+      <li><b>nihonshi_index_all.csv</b> / <b>periods.csv</b> / <b>chapters.csv</b> / <b>manual_tags.csv</b> の4つをまとめて選びます。</li>
+      <li>「開く」を押すと、すぐに使えるようになります。</li>
+    </ol>
+    <button id="btn-import-onboard" class="primary-btn" type="button">データを取り込む</button>
+    <p id="onboard-status" class="status"></p>
+  </div>
+</div>
+
+<div id="backdrop" class="backdrop" hidden></div>
+
+<!-- 絞り込みシート -->
+<section id="filter-sheet" class="sheet" hidden aria-label="絞り込み">
+  <div class="sheet-head">
+    <span class="grabber"></span>
+    <div class="sheet-head-row">
+      <strong>絞り込み</strong>
+      <button class="link-btn danger" id="btn-reset-all" type="button">条件をすべてリセット</button>
+    </div>
+  </div>
+
+  <div class="sheet-body">
+    <details class="sec" open>
+      <summary><span>時期</span><span class="sec-count" data-for="period"></span></summary>
+      <div class="sec-body">
+        <button class="link-btn" data-clear="period" type="button">すべて解除</button>
+        <div class="year-range">
+          <label>西暦 <input id="year-from" type="text" inputmode="text" placeholder="から（例 1600 / 前108）"></label>
+          <label>〜 <input id="year-to" type="text" inputmode="text" placeholder="まで（例 1700）"></label>
+        </div>
+        <p class="note">※ ツリーと西暦範囲の両方を指定したときは、どちらかに当てはまれば表示します。</p>
+        <div id="period-tree" class="tree"></div>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary><span>分野</span><span class="sec-count" data-for="field"></span></summary>
+      <div class="sec-body">
+        <button class="link-btn" data-clear="field" type="button">すべて解除</button>
+        <div id="field-chips" class="chipset"></div>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary><span>種類</span><span class="sec-count" data-for="kind"></span></summary>
+      <div class="sec-body">
+        <button class="link-btn" data-clear="kind" type="button">すべて解除</button>
+        <div id="kind-chips" class="chipset"></div>
+        <div id="person-extra" hidden>
+          <h4>国 <button class="link-btn" data-clear="country" type="button">すべて解除</button></h4>
+          <div id="country-chips" class="chipset"></div>
+          <h4>立場 <button class="link-btn" data-clear="role" type="button">すべて解除</button></h4>
+          <div id="role-chips" class="chipset"></div>
+        </div>
+      </div>
+    </details>
+
+    <details class="sec">
+      <summary><span>教科書の章</span><span class="sec-count" data-for="chapter"></span></summary>
+      <div class="sec-body">
+        <button class="link-btn" data-clear="chapter" type="button">すべて解除</button>
+        <div id="chapter-list"></div>
+      </div>
+    </details>
+  </div>
+
+  <div class="sheet-foot">
+    <button id="btn-sheet-close" class="primary-btn" type="button"><span id="sheet-count">0件</span>を表示</button>
+  </div>
+</section>
+
+<!-- 設定シート -->
+<section id="settings-sheet" class="sheet" hidden aria-label="設定">
+  <div class="sheet-head">
+    <span class="grabber"></span>
+    <div class="sheet-head-row"><strong>設定</strong></div>
+  </div>
+  <div class="sheet-body">
+    <h3>データ</h3>
+    <p id="data-status" class="status"></p>
+    <button id="btn-import" class="primary-btn" type="button">データを取り込む</button>
+    <p class="note">iPhoneの「ファイル」アプリから、4つのCSVをまとめて選べます。取り込んだデータは同梱データより優先されます。</p>
+    <button id="btn-drop" class="secondary-btn" type="button">取り込んだデータを削除</button>
+
+    <h3>アプリ</h3>
+    <p class="status" id="app-version"></p>
+    <button id="btn-refresh" class="secondary-btn" type="button">最新版を読み込み直す</button>
+    <p class="note">データやアプリを更新したのに変わらないときに押してください。</p>
+
+    <h3>使い方のヒント</h3>
+    <ul class="tips">
+      <li>空白で区切ると、両方を含むものを探します（例：<b>ほうじょう ときむね</b>）。</li>
+      <li>漢字とひらがなを混ぜても探せます（例：<b>日中へいわ</b>）。</li>
+      <li><b>〜</b>（「から」で変換）を使うと、前方一致・後方一致になります（例：<b>日中〜</b>、<b>〜条約</b>）。</li>
+    </ul>
+  </div>
+  <div class="sheet-foot">
+    <button id="btn-settings-close" class="primary-btn" type="button">閉じる</button>
+  </div>
+</section>
+
+<input id="file-input" type="file" accept=".csv,text/csv,text/plain" multiple hidden>
+
+<script src="search.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

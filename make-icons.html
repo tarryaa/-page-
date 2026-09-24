@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>アイコンを作る</title>
+<style>
+  body { margin:0; padding:20px; font-size:16px; line-height:1.6; background:#f7f5f1; color:#22201e;
+         font-family:-apple-system, BlinkMacSystemFont, "Hiragino Sans","Yu Gothic",Meiryo,sans-serif; }
+  h1 { font-size:20px; }
+  ol { padding-left:1.3em; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin:20px 0; }
+  .item { text-align:center; }
+  canvas { border:1px solid #ddd7cf; border-radius:8px; background:#fff; }
+  .name { font-size:13px; color:#6b6560; margin-top:4px; }
+  button { min-height:48px; padding:0 18px; font-size:16px; font-weight:600; border:0;
+           border-radius:10px; background:#8c2f39; color:#fff; cursor:pointer; }
+  .note { color:#6b6560; font-size:15px; }
+</style>
+</head>
+<body>
+<h1>アイコンを作る</h1>
+<p class="note">すでに <code>icons</code> フォルダにアイコンが入っている場合は、このファイルを使う必要はありません。<br>
+アイコンを作り直したいときだけ使ってください。</p>
+<ol>
+  <li>下の「3つまとめて保存」を押します。</li>
+  <li>3つのPNGがダウンロードフォルダに保存されます。</li>
+  <li>保存された3つを、アプリの <code>icons</code> フォルダに入れます（同じ名前のものは上書き）。</li>
+</ol>
+
+<div class="row" id="row"></div>
+<button id="save">3つまとめて保存</button>
+
+<script>
+var SPECS = [
+  { size: 180, name: 'apple-touch-icon.png' },
+  { size: 192, name: 'icon-192.png' },
+  { size: 512, name: 'icon-512.png' }
+];
+
+function draw(size) {
+  var c = document.createElement('canvas');
+  c.width = c.height = size;
+  var g = c.getContext('2d');
+
+  // 背景（茜色）
+  g.fillStyle = '#8c2f39';
+  g.fillRect(0, 0, size, size);
+
+  // 薄い枠線
+  g.strokeStyle = 'rgba(255,255,255,0.30)';
+  g.lineWidth = Math.max(2, Math.round(size * 0.022));
+  var m = Math.round(size * 0.085);
+  g.strokeRect(m, m, size - m * 2, size - m * 2);
+
+  // 「史」の一文字
+  g.fillStyle = '#ffffff';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = '700 ' + Math.round(size * 0.56) +
+    'px "Hiragino Mincho ProN","Yu Mincho","MS Mincho","Hiragino Sans","Yu Gothic",serif';
+  g.fillText('史', size / 2, size * 0.53);
+
+  return c;
+}
+
+var row = document.getElementById('row');
+var canvases = SPECS.map(function (s) {
+  var c = draw(s.size);
+  var box = document.createElement('div');
+  box.className = 'item';
+  var view = c;
+  if (s.size > 192) { view = c; c.style.width = '192px'; c.style.height = '192px'; }
+  box.appendChild(view);
+  var nm = document.createElement('div');
+  nm.className = 'name';
+  nm.textContent = s.name + '（' + s.size + '×' + s.size + '）';
+  box.appendChild(nm);
+  row.appendChild(box);
+  return c;
+});
+
+document.getElementById('save').addEventListener('click', function () {
+  SPECS.forEach(function (s, i) {
+    setTimeout(function () {
+      var a = document.createElement('a');
+      a.download = s.name;
+      a.href = canvases[i].toDataURL('image/png');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }, i * 400);
+  });
+});
+</script>
+</body>
+</html>

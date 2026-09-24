@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>日本史索引 — 動作テスト</title>
+<style>
+  :root { --bg:#f7f5f1; --card:#fff; --text:#22201e; --sub:#6b6560; --line:#ddd7cf;
+          --ok:#1e7a44; --ng:#c0392b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16171c; --card:#23252c; --text:#eceaf0; --sub:#a8a4b0; --line:#34363f;
+            --ok:#5fd18c; --ng:#ff8b7d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding: 16px; background: var(--bg); color: var(--text); font-size: 16px;
+         line-height: 1.6;
+         font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .lead { color: var(--sub); font-size: 15px; margin: 0 0 16px; }
+  #summary { font-size: 19px; font-weight: 700; padding: 12px 14px; border-radius: 12px;
+             background: var(--card); border: 1px solid var(--line); margin-bottom: 14px; }
+  #summary.ok { color: var(--ok); }
+  #summary.ng { color: var(--ng); }
+  table { width: 100%; border-collapse: collapse; background: var(--card);
+          border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line);
+           font-size: 15px; vertical-align: top; }
+  th { background: rgba(127,127,127,.08); font-size: 14px; }
+  tr:last-child td { border-bottom: 0; }
+  .res { font-weight: 700; white-space: nowrap; }
+  .res.ok { color: var(--ok); }
+  .res.ng { color: var(--ng); }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px;
+         background: rgba(127,127,127,.12); padding: 1px 5px; border-radius: 5px; }
+  .detail { color: var(--sub); font-size: 13px; }
+  #picker { padding: 16px; background: var(--card); border: 1px solid var(--line);
+            border-radius: 12px; }
+  button { min-height: 48px; padding: 0 18px; font-size: 16px; font-weight: 600;
+           border: 0; border-radius: 10px; background: #8c2f39; color: #fff; cursor: pointer; }
+  #perf { margin-top: 16px; font-size: 15px; color: var(--sub); }
+</style>
+</head>
+<body>
+
+<h1>日本史索引 — 動作テスト</h1>
+<p class="lead">仕様書の検索テストが全部通るかを確かめます。</p>
+
+<div id="picker" hidden>
+  <p><b>データが自動で読み込めませんでした。</b><br>
+     （パソコンでファイルを直接開いたときは、安全上の決まりで自動読み込みができません）</p>
+  <p>下のボタンから <code>nihonshi_index_all.csv</code> を選ぶとテストが始まります。<br>
+     4つまとめて選んでも大丈夫です。</p>
+  <button id="pick">CSVを選ぶ</button>
+  <input id="file" type="file" accept=".csv,text/csv,text/plain" multiple hidden>
+</div>
+
+<div id="summary">データを読み込んでいます…</div>
+<table id="tbl"><thead>
+  <tr><th style="width:5.5em">結果</th><th>テスト</th></tr>
+</thead><tbody></tbody></table>
+<div id="perf"></div>
+
+<script src="search.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var entries = null;
+  var tbody = document.querySelector('#tbl tbody');
+  var summary = document.getElementById('summary');
+
+  /* ---------- データの読み込み ---------- */
+
+  fetch('data/nihonshi_index_all.csv', { cache: 'no-cache' })
+    .then(function (r) { if (!r.ok) throw new Error('404'); return r.text(); })
+    .then(function (t) { start(t); })
+    .catch(function () {
+      document.getElementById('picker').hidden = false;
+      summary.textContent = '下のボタンからCSVを選んでください。';
+    });
+
+  document.getElementById('pick').addEventListener('click', function () {
+    document.getElementById('file').click();
+  });
+  document.getElementById('file').addEventListener('change', function (ev) {
+    var files = Array.prototype.slice.call(ev.target.files);
+    var target = null;
+    files.forEach(function (f) { if (/nihonshi|index/i.test(f.name)) target = f; });
+    if (!target) target = files[0];
+    if (!target) return;
+    var fr = new FileReader();
+    fr.onload = function () {
+      document.getElementById('picker').hidden = true;
+      start(String(fr.result || ''));
+    };
+    fr.readAsText(target, 'UTF-8');
+  });
+
+  function start(csvText) {
+    try {
+      entries = NS.buildEntries(csvText);
+    } catch (err) {
+      summary.className = 'ng';
+      summary.textContent = 'データの読み込みに失敗しました：' + err.message;
+      return;
+    }
+    runTests();
+  }
+
+  /* ---------- 便利関数 ---------- */
+
+  function search(q) {
+    var pats = NS.compileQuery(q), out = [];
+    for (var i = 0; i < entries.length; i++) {
+      var m = NS.matchEntry(entries[i], pats);
+      if (m.ok) out.push({ e: entries[i], alias: m.alias });
+    }
+    return out;
+  }
+  function terms(q) { return search(q).map(function (x) { return x.e.term; }); }
+  function countTerm(q, t) {
+    return terms(q).filter(function (x) { return x === t; }).length;
+  }
+
+  var tests = [];
+  function T(label, fn) { tests.push({ label: label, fn: fn }); }
+  function need(arr, v) {
+    return arr.indexOf(v) >= 0 ? true : '「' + v + '」が出ませんでした（' + arr.length + '件中）';
+  }
+  function needAll(arr, vs) {
+    for (var i = 0; i < vs.length; i++) { var r = need(arr, vs[i]); if (r !== true) return r; }
+    return true;
+  }
+
+  /* ---------- 仕様書のテスト表 ---------- */
+
+  T('<code>日中へいわ</code> → 日中平和友好条約を含む', function () {
+    return need(terms('日中へいわ'), '日中平和友好条約');
+  });
+
+  T('<code>ニッチュウ</code> → 日中戦争・日中共同声明などを含む', function () {
+    return needAll(terms('ニッチュウ'), ['日中戦争', '日中共同声明', '日中平和友好条約']);
+  });
+
+  T('<code>日中～</code> → 日中で始まる語だけ', function () {
+    var r = search('日中～');
+    var ng = r.filter(function (x) { return !x.alias && x.e.term.indexOf('日中') !== 0; });
+    if (ng.length) return '始まらない語が出ました：' + ng.map(function (x) { return x.e.term; }).join('、');
+    return needAll(r.map(function (x) { return x.e.term; }), ['日中戦争', '日中平和友好条約']);
+  });
+
+  T('<code>～条約</code> → 条約で終わる語だけ', function () {
+    var r = search('～条約');
+    var ng = r.filter(function (x) {
+      return !x.alias && x.e.term.slice(-2) !== '条約';
+    });
+    if (ng.length) return '終わらない語が出ました：' + ng.map(function (x) { return x.e.term; }).join('、');
+    return r.length > 0 ? true : '1件も出ませんでした';
+  });
+
+  T('<code>日〜条約</code>（波ダッシュ）→ 日米和親条約・日英通商航海条約を含み、日中共同声明は含まない', function () {
+    var t = terms('日〜条約');
+    var r = needAll(t, ['日米和親条約', '日英通商航海条約']);
+    if (r !== true) return r;
+    return t.indexOf('日中共同声明') < 0 ? true : '日中共同声明が出てしまいました';
+  });
+
+  T('<code>ｇａｔｔ</code>（全角）→ GATT を含む', function () { return need(terms('ｇａｔｔ'), 'GATT'); });
+  T('<code>gatt</code>（半角）→ GATT を含む', function () { return need(terms('gatt'), 'GATT'); });
+  T('<code>ｇｈｑ</code> → GHQ/SCAP を含む', function () { return need(terms('ｇｈｑ'), 'GHQ/SCAP'); });
+
+  T('<code>かいごうしゅう</code> → 会合衆（1件にまとまっている）', function () {
+    var n = countTerm('かいごうしゅう', '会合衆');
+    return n === 1 ? true : n + '件出ました（1件のはず）';
+  });
+  T('<code>えごうしゅう</code> → 会合衆（1件にまとまっている）', function () {
+    var n = countTerm('えごうしゅう', '会合衆');
+    return n === 1 ? true : n + '件出ました（1件のはず）';
+  });
+  T('<code>やかた</code> → 館（1件）', function () {
+    var n = countTerm('やかた', '館');
+    return n === 1 ? true : n + '件出ました（1件のはず）';
+  });
+  T('<code>たち</code> → 館（1件）', function () {
+    var n = countTerm('たち', '館');
+    return n === 1 ? true : n + '件出ました（1件のはず）';
+  });
+
+  T('<code>ほうじょう ときむね</code> → 北条時宗', function () {
+    return need(terms('ほうじょう ときむね'), '北条時宗');
+  });
+  T('<code>藤原 みちなが</code> → 藤原道長', function () {
+    return need(terms('藤原 みちなが'), '藤原道長');
+  });
+  T('<code>えもん</code> → 酒井田柿右衛門を含む', function () {
+    return need(terms('えもん'), '酒井田柿右衛門');
+  });
+  T('<code>天草四郎</code> → 益田時貞（別名でヒット）', function () {
+    var r = search('天草四郎').filter(function (x) { return x.e.term === '益田時貞'; });
+    if (!r.length) return '益田時貞が出ませんでした';
+    return r[0].alias ? true : '別名として表示されませんでした';
+  });
+  T('空欄 → 全件', function () {
+    var n = terms('').length;
+    return n === entries.length ? true : n + '件（全' + entries.length + '件のはず）';
+  });
+
+  /* ---------- 追加のテスト ---------- */
+
+  T('【追加】<code>とくがわ よしむね</code> / <code>徳川 よしむね</code> → 徳川吉宗', function () {
+    var a = need(terms('とくがわ よしむね'), '徳川吉宗');
+    if (a !== true) return a;
+    return need(terms('徳川 よしむね'), '徳川吉宗');
+  });
+  T('【追加】<code>にっちゅう平和</code>（かな＋漢字）→ 日中平和友好条約', function () {
+    return need(terms('にっちゅう平和'), '日中平和友好条約');
+  });
+  T('【追加】<code>ちゅうへ</code>（かたまりの途中どうし）→ 日中平和友好条約', function () {
+    return need(terms('ちゅうへ'), '日中平和友好条約');
+  });
+  T('【追加】<code>日中～　～条約</code>（全角空白区切り）→ 日中平和友好条約のみ', function () {
+    var r = search('日中～　～条約').filter(function (x) { return !x.alias; })
+      .map(function (x) { return x.e.term; });
+    return (r.length === 1 && r[0] === '日中平和友好条約') ? true : r.join('、') || '0件';
+  });
+  T('【追加】<code>～条約～</code> は部分一致（<code>条約</code>と同じ結果）', function () {
+    var a = terms('～条約～').sort().join('|'), b = terms('条約').sort().join('|');
+    return a === b ? true : '結果が違います';
+  });
+  T('【追加】<code>ﾆｯﾁｭｳ</code>（半角カナ）→ 日中戦争', function () {
+    return need(terms('ﾆｯﾁｭｳ'), '日中戦争');
+  });
+  T('【追加】読みの解析：すべての行で「読み」からルビを外すと「用語」と一致する', function () {
+    var ng = [];
+    entries.forEach(function (e) {
+      e.readings.forEach(function (rd) {
+        var sur = rd.chunks.map(function (c) { return c.s; }).join('');
+        if (sur !== e.term) ng.push(e.term);
+      });
+    });
+    return ng.length === 0 ? true : ng.length + '件ずれています：' + ng.slice(0, 5).join('、');
+  });
+  T('【追加】同じ用語・同じページの行は1件にまとまっている', function () {
+    var seen = {}, dup = [];
+    entries.forEach(function (e) {
+      var k = e.term + '@' + e.pages.join(',');
+      if (seen[k]) dup.push(k); else seen[k] = 1;
+    });
+    return dup.length === 0 ? true : '重複：' + dup.slice(0, 5).join('、');
+  });
+  T('【追加】「要確認：」で始まるメモは検索に使われない', function () {
+    var warn = null;
+    for (var i = 0; i < entries.length && !warn; i++) {
+      if (entries[i].warnMemos.length) warn = entries[i];
+    }
+    if (!warn) return true;  // 要確認メモが無ければテスト不要
+    if (warn.nAlias.some(function (a) { return a.indexOf(NS.normText('要確認')) >= 0; })) {
+      return '要確認メモが検索対象に入っています';
+    }
+    return true;
+  });
+
+  /* ---------- 実行 ---------- */
+
+  function runTests() {
+    var pass = 0, html = '';
+    tests.forEach(function (t) {
+      var ok, detail = '';
+      try {
+        var r = t.fn();
+        ok = (r === true);
+        if (!ok) detail = String(r);
+      } catch (err) { ok = false; detail = 'エラー：' + err.message; }
+      if (ok) pass++;
+      html += '<tr><td class="res ' + (ok ? 'ok">○ 合格' : 'ng">× 不合格') + '</td><td>' +
+        t.label + (detail ? '<br><span class="detail">' + detail + '</span>' : '') + '</td></tr>';
+    });
+    tbody.innerHTML = html;
+    summary.className = (pass === tests.length) ? 'ok' : 'ng';
+    summary.textContent = (pass === tests.length ? '✓ ' : '× ') +
+      pass + ' / ' + tests.length + ' 合格　（索引 ' + entries.length + '件）';
+    measure();
+  }
+
+  function measure() {
+    var qs = ['日', '日中', '日中へ', '日中へいわ', 'にっちゅう', 'ほうじょう ときむね', '～条約', 'あ'];
+    var out = ['<b>速さの目安</b>（1回の検索にかかった時間。50ミリ秒以内が目標）<br>'];
+    var worst = 0;
+    qs.forEach(function (q) {
+      var t0 = performance.now(), n = 0;
+      for (var i = 0; i < 5; i++) n = search(q).length;
+      var ms = (performance.now() - t0) / 5;
+      if (ms > worst) worst = ms;
+      out.push('「' + q + '」… ' + ms.toFixed(1) + ' ミリ秒（' + n + '件）');
+    });
+    out.push('<b>いちばん遅いもの：' + worst.toFixed(1) + ' ミリ秒 → ' +
+      (worst <= 50 ? '目標内です' : '目標を超えています') + '</b>');
+    document.getElementById('perf').innerHTML = out.join('<br>');
+  }
+})();
+</script>
+</body>
+</html>
