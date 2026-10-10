@@ -1,0 +1,22 @@
+{
+ "name": "速読英熟語",
+ "short_name": "速読英熟語",
+ "start_url": "sokudoku.html",
+ "scope": ".",
+ "display": "standalone",
+ "background_color": "#0b0d10",
+ "theme_color": "#2563eb",
+ "icons": [
+  {
+   "src": "icon-soku-180.png",
+   "sizes": "180x180",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-soku-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any maskable"
+  }
+ ]
+}
